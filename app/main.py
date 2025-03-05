@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 from transformers import pipeline
 from pydantic import BaseModel
-from .routes.chatbot import Chatbot
-
+from app.routes.chatbot import Chatbot
+from app.routes.books import router as books_router
 
 class Question(BaseModel):
     question: str
@@ -18,6 +18,7 @@ class Context(BaseModel):
 chatbot = Chatbot()
 
 app = FastAPI()
+app.include_router(books_router)
 
 @app.post("/say_hello")
 def say_hello(context: Context):

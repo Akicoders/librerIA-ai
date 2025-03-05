@@ -2,8 +2,7 @@ from transformers import pipeline
 
 class Chatbot:
     def __init__(self):
-        self.qa_pipeline = pipeline("question-answering", 
-                                    model="mrm8488/distill-bert-base-spanish-wwm-cased-finetuned-spa-squad2")
+        self.qa_pipeline = pipeline("question-answering")
         self.context = ""
 
     def save(self, response: str):
