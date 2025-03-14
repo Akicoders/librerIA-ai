@@ -1,33 +1,38 @@
 from bs4 import BeautifulSoup as bs 
-import requests
+import cloudscraper
 import json
 import re
 from urllib.parse import quote
+from open_library import search_book_info
+from gemini import generate
 
-def search_book_info(book_title: str):
-    # Format the URL with the encoded book title
+def search_book(book_title: str):
+    # Formatear la URL con el título del libro codificado
     base_url = "https://es.pdfdrive.com/search?q="
     search_url = f"{base_url}{quote(book_title)}&searchin=es&more=true"
     
     try:
-        response = requests.get(search_url)
+        scraper = cloudscraper.create_scraper()
+        response = scraper.get(search_url)
         soup = bs(response.text, 'html.parser')
         
-        # Find the first book result
+        # Depuración: Imprimir el contenido de soup para verificar la estructura
+        # print(soup.prettify())
+        
+        # Encontrar el primer resultado del libro
         book_item = soup.find('li', {'onclick': lambda x: x and 'ontouchstart' in x})
         if not book_item:
             return None
         
         link = 'https://es.pdfdrive.com' + book_item.find('a', href=True)['href']
-        # Extract book details
+        # Extraer detalles del libro
         book_info = {
             'title': book_item.find('h2').text.strip(),
-            'link': link,
             'image': book_item.find('img')['src'],
             'downloads': download_pdf(link)
         }
         
-        # Get additional info
+        # Obtener información adicional
         file_info = book_item.find('div', class_='file-info')
         if file_info:
             info_spans = file_info.find_all('span')
@@ -40,25 +45,41 @@ def search_book_info(book_title: str):
                     book_info['size'] = span.text.strip()
                 elif 'fi-lang' in span.get('class', []):
                     book_info['language'] = span.text.strip()
-        
+        # Agregamos la api de OpenLibrary en caso de que no exista el año y 
+        # el autor.
+        info_api_library = search_book_info(book_title)
+        book_info['author'] = info_api_library['author']
+        if book_info['year'] == None or int(book_info['year']) >= int(info_api_library['publication_year']) :
+            book_info['year'] = info_api_library['publication_year'] 
+
+        # Para agregar una breve descripcion elegi Gemini Api , en donde hago
+        # un prompt sencillo pero eficiente para tener una descripcion sin problemas
+        generate_info =  generate(book_title)
+        book_info['description'] = generate_info['resumen']
+        book_info['category'] = generate_info['categoria']
         return book_info
-        
+
     except Exception as e:
         return {'error': str(e)}
 
 def scraping(books: list[str]):
     results = []
-    for book in books:
-        result = search_book_info(book)
+    for index, book in enumerate(books):
+        print(f"Buscando información del libro {index + 1} de {len(books)}: {book}")
+        result = search_book(book)
         if result:
             results.append(result)
     return results
 
 def download_pdf(url: str):
     try:
-        response = requests.get(url)
+        scraper = cloudscraper.create_scraper()
+        response = scraper.get(url)
         soup = bs(response.text, 'html.parser')
-        download_link = soup.find('button', {'id': 'previewButtonMain'})['data-preview']
+        download_button = soup.find('button', {'id': 'previewButtonMain'})
+        if not download_button:
+            return None
+        download_link = download_button['data-preview']
         # ebook/preview?id=189551951&session=784f9be7aed4954389ed71f2a18be609
         indent = re.search(r'id=(\d+)&', download_link).group(1)
         session = re.search(r'session=(\w+)', download_link).group(1)
@@ -78,12 +99,13 @@ def download_pdf(url: str):
         return links_dowload
     except Exception as e:
         print(f"Error: {e}")
+        return None
 
-# Example usage
+# Ejemplo de uso
 if __name__ == "__main__":
-    result = search_book_info("elefante")
-    pdf_link = download_pdf(result['link'])
-    print(pdf_link)
+    result = scraping([
+        "Los 7 hábitos de la gente altamente efectiva",
+    ])
     print(json.dumps(result, indent=2, ensure_ascii=False))
 
-
+    
