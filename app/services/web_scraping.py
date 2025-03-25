@@ -5,6 +5,8 @@ import re
 from urllib.parse import quote
 from open_library import search_book_info
 from gemini import generate
+from pdf_processor import PDFProcessor
+from upload_cloudinary import uploadPDF
 
 def search_book(book_title: str):
     # Formatear la URL con el título del libro codificado
@@ -29,7 +31,7 @@ def search_book(book_title: str):
         book_info = {
             'title': book_item.find('h2').text.strip(),
             'image': book_item.find('img')['src'],
-            'downloads': download_pdf(link)
+            'downloads': download_pdf(link,book_item.find('h2').text.strip()),
         }
         
         # Obtener información adicional
@@ -71,7 +73,7 @@ def scraping(books: list[str]):
             results.append(result)
     return results
 
-def download_pdf(url: str):
+def download_pdf(url: str, name: str):
     try:
         scraper = cloudscraper.create_scraper()
         response = scraper.get(url)
@@ -95,6 +97,8 @@ def download_pdf(url: str):
                 "pdf": download_link_pdf,
                 "mobi": download_link_mobi,
                 "epub": download_link_epu }
+        processor = PDFProcessor(download_link_pdf)
+        pdf_path = processor.download_from_url(download_link_pdf, name)
 
         return links_dowload
     except Exception as e:
